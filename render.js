@@ -134,8 +134,8 @@ class GL {
     } else {
       left = -2;
       right = 1;
-      top = 1 + (1 / canvas_aspect - 1 / scene_aspect);
-      bottom = -1 - (1 / canvas_aspect - 1 / scene_aspect);
+      top = 1 + ((1 / canvas_aspect) - (1 / scene_aspect));
+      bottom = -1 - ((1 / canvas_aspect) - (1 / scene_aspect));
     }
 
     const mvp = new Float32Array([
