@@ -1,7 +1,11 @@
 "use strict";
 
 import { FragmentShader, VertexShader, ShaderProgram } from './shader.js';
+import { QuadPrimitive } from './quad-primitive.js';
 import { Quad } from './quad.js';
+import { Mesh } from './mesh.js';
+import { Matrix } from './matrix.js';
+import { Vector } from './vector.js';
 
 /**
  * Class representing an OpenGL context.
@@ -16,10 +20,36 @@ export class GL {
     this.canvas = canvas;
     this.gl = canvas.getContext("webgl2");
     this.gl.get_super = () => this;
-    this.quads = [];
+    this.objects = [];
+    this.projection_matrix = Matrix.identity();
+    this.view_matrix = Matrix.identity();
+    this.camera_position = new Vector(0, 0, 0, 1);
+    this.zoom_target = new Vector(0, 0, 0, 1);
+    this.zoom_speed = 0;
 
+    // Add resize listener
     window.addEventListener('resize', () => {
-      this.render();
+      this.resize();
+    });
+
+    // Add mouse wheel listener
+    canvas.addEventListener('wheel', (event) => {
+      this.zoom_target = this.view_matrix.inverse().multiply_vector(
+        this.unproject(event.layerX, this.canvas.clientHeight - event.layerY, 0.5)
+      );
+      if (event.deltaY > 0) {
+        if (this.zoom_speed > 0) {
+          this.zoom_speed += 1;
+        } else {
+          this.zoom_speed = 1;
+        }
+      } else {
+        if (this.zoom_speed > 0) {
+          this.zoom_speed = -1;
+        } else {
+          this.zoom_speed -= 1;
+        }
+      }
     });
   }
 
@@ -64,19 +94,47 @@ export class GL {
   }
 
   /**
+   * Returns a quad primitive so it's sonstituent VBO can be resued.
+   *
+   * @return {QuadPrimitive}
+   */
+  get_quad_primitive() {
+    if (this.quad_primitive === undefined) {
+      this.quad_primitive = new QuadPrimitive(this.ref());
+    }
+    return this.quad_primitive;
+  }
+
+  /**
    * Create a quad with given position and size.
    *
    * @param {float} x
-   * @param {gloat} y
+   * @param {float} y
    * @param {float} width
    * @param {float} height
    *
    * @return {Quad}
    */
   create_quad(x, y, width, height) {
-    const quad = new Quad(this.ref(), x, y, width, height);
-    this.quads.push(quad);
-    return quad;
+    return new Quad(this.ref(), x, y, width, height);
+  }
+
+  /**
+   * Create a mesh with the given objects.
+   *
+   * @param {array} objects
+   */
+  create_mesh(objects) {
+    return new Mesh(this.ref(), objects);
+  }
+
+  /**
+   * Add an object to the scene in order to be rendered.
+   *
+   * @param {Object} object
+   */
+  add_object_to_scene(object) {
+    this.objects.push(object);
   }
 
   /**
@@ -98,12 +156,48 @@ export class GL {
   }
 
   /**
-   * Set the current model, view and projection matrix.
+   * Sets the position of the camera.
    *
-   * @param {Float32Array} mvp
+   * @param {float} x
+   * @param {float} y
+   * @param {float} z
    */
-  set_mvp(mvp) {
-    this.get_shader_program().set_uniform_mat4('mvp', mvp);
+  set_camera_position(x, y, z) {
+    this.camera_position = new Vector(x, y, z);
+    this.view_matrix = Matrix.identity().translate(-x, -y, -z);
+  }
+
+  /**
+   * Computes world coordinates from given screen coordinates.
+   *
+   * @param {float} x
+   * @param {float} y
+   * @param {float} z
+   */
+  unproject(x, y, z) {
+    return this.projection_matrix.inverse().multiply_vector(new Vector(
+      ((2 * x) / this.canvas.clientWidth) - 1,
+      ((2 * y) / this.canvas.clientHeight) - 1,
+      (2 * z) - 1,
+      1
+    ));
+  }
+
+  /**
+   * Upload the current model matrix to the gpu.
+   */
+  upload_model_matrix(model) {
+    this.get_shader_program().set_uniform_mat4('model', model.transpose().as_float_array());
+  }
+
+  /**
+   * Upload the current view and projection matrix to the gpu.
+   */
+  upload_view_projection_matrix() {
+    this.get_shader_program().set_uniform_mat4(
+      'view_projection',
+      this.projection_matrix.multiply(this.view_matrix).transpose().as_float_array()
+    );
   }
 
   /**
@@ -115,7 +209,7 @@ export class GL {
 
     // If the width & height haven't changed, don't bother resizing.
     if (this.canvas.width === width && this.canvas.height === height) {
-      return;
+      return false;
     }
 
     // Update canvas width and height.
@@ -124,45 +218,113 @@ export class GL {
 
     // Compute apparent aspect ratio.
     const canvas_aspect = width / height;
-    const scene_aspect = 3 / 2;
 
     // Compute appropriate orthographic projection matrix.
     let left, right, top, bottom;
 
-    if (canvas_aspect > scene_aspect) {
-      left = -2 - (canvas_aspect - scene_aspect);
-      right = 1 + (canvas_aspect - scene_aspect);
+    if (canvas_aspect > 1) {
+      left = -canvas_aspect;
+      right = canvas_aspect;
       top = 1;
       bottom = -1;
     } else {
-      left = -2;
+      left = -1;
       right = 1;
-      top = 1 + ((1 / canvas_aspect) - (1 / scene_aspect));
-      bottom = -1 - ((1 / canvas_aspect) - (1 / scene_aspect));
+      top = 1 / canvas_aspect;
+      bottom = -1 / canvas_aspect;
     }
 
-    const mvp = new Float32Array([
-      2 / (right - left), 0, 0, -(right + left) / (right - left),
-      0, 2 / (top - bottom), 0, -(top + bottom) / (top - bottom),
-      0, 0, 1, 0,
-      0, 0, 0, 1
-    ]);
-    this.set_mvp(mvp);
+    this.projection_matrix = new Matrix(
+      new Vector(2 / (right - left), 0, 0, -(right + left) / (right - left)),
+      new Vector(0, 2 / (top - bottom), 0, -(top + bottom) / (top - bottom)),
+      new Vector(0, 0, 1, 0),
+      new Vector(0, 0, 0, 1)
+    );
+
+    return true;
   }
 
   /**
    * Render the scene.
    */
   render() {
-    this.resize();
-
     this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    this.gl.clearColor(0, 0, 0, 0);
+    this.gl.clearColor(58 / 255, 0, 2 / 15, 1);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
     this.gl.useProgram(this.get_shader_program().ref());
 
-    this.quads.forEach((quad) => quad.render());
+    this.upload_view_projection_matrix();
+
+    this.objects.forEach((object) => object.render(Matrix.identity()));
+  }
+
+  /**
+   * Perform zoom calculations.
+   *
+   * @param {integer} frame_delta
+   */
+  zoom(frame_delta) {
+    if (this.zoom_speed === 0) {
+      return false;
+    }
+
+    // Find the vector from the current camera position to the zoom target.
+    // Scale by the frame_delta so that the movement would occur in 1 / zoom_speed seconds.
+    const movement_vector = new Vector(
+      this.zoom_target.x - this.camera_position.x,
+      this.zoom_target.y - this.camera_position.y,
+      this.zoom_target.z - this.camera_position.z,
+      -this.camera_position.w,
+    ).multiply(frame_delta * Math.abs(this.zoom_speed) / 1000);
+
+    // Update the camera position along the movement vector.
+    this.set_camera_position(
+      this.camera_position.x + movement_vector.x,
+      this.camera_position.y + movement_vector.y,
+      this.camera_position.z + movement_vector.z,
+    );
+
+    // Scale the projection matrix for the zoom effect.
+    this.projection_matrix = this.projection_matrix.scale(
+      1 + (frame_delta * -this.zoom_speed / 1000),
+      1 + (frame_delta * -this.zoom_speed / 1000),
+      1
+    );
+
+    // Reduce the zoom speed over time.
+    this.zoom_speed *= 1 - (frame_delta / 1000);
+    if (Math.abs(this.zoom_speed) < 0.005) {
+      this.zoom_speed = 0;
+    }
+
+    return true;
+  }
+
+  /**
+   * The event loop executed for each tick.
+   */
+  event_loop() {
+    // Measure time delta for fps independant physics calculations
+    const frame_time = Date.now();
+    if (this.last_frame_time === undefined) {
+      this.last_frame_time = frame_time;
+    }
+    const frame_delta = frame_time - this.last_frame_time;
+    this.last_frame_time = frame_time;
+
+    // Keep track of changes and only render if necessary.
+    let scene_dirty = false;
+
+    scene_dirty |= this.resize();
+    scene_dirty |= this.zoom(frame_delta);
+
+    if (scene_dirty) {
+      this.render();
+    }
+
+    // Schedule another tick
+    window.setTimeout(() => this.event_loop(), 0);
   }
 }

@@ -3,10 +3,9 @@
 import { GL } from './gl.js';
 
 /**
- * Main entrypoint function that creates resources and performs a render.
+ * Main entrypoint function that creates resources and performs a render onto the given canvas.
  */
-async function main() {
-  const canvas = document.getElementById("c");
+async function mandelbrot(canvas) {
   const gl = new GL(canvas);
 
   const vertex_shader_source = await fetch('shaders/vertex.glsl').then((res) => res.text());
@@ -18,10 +17,15 @@ async function main() {
 
   gl.set_shader_program(shader_program);
 
-  gl.create_quad(-2, -1, 3, 2);
+  const quad = gl.create_quad(-2, -1, 3, 2);
+  const mesh = gl.create_mesh([quad]);
+  gl.add_object_to_scene(mesh);
 
-  gl.render();
+  gl.set_camera_position(-0.5, 0, 0);
+
+  gl.event_loop();
 }
 
-// run main entrypoint.
-main();
+// Start main entrypoint.
+const canvas = document.getElementById("c");
+mandelbrot(canvas);

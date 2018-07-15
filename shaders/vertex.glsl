@@ -2,12 +2,13 @@
 
 precision highp float;
 
-in vec4 position;
+in vec3 position;
 out vec4 vertex;
 
-uniform mat4 mvp;
+uniform mat4 model;
+uniform mat4 view_projection;
 
 void main() {
-  vertex = position;
-  gl_Position = position * mvp;
+  vertex = model *  vec4(position, 1.0);
+  gl_Position = view_projection * vertex;
 }

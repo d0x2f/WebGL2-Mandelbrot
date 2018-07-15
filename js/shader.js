@@ -15,8 +15,9 @@ export class Shader {
     gl.shaderSource(this.shader, source);
     gl.compileShader(this.shader);
     if (!gl.getShaderParameter(this.shader, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(this.shader);
       gl.deleteShader(this.shader);
-      throw 'unable to create shader.';
+      throw 'unable to create shader. gl said: ' + log;
     }
   }
 
