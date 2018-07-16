@@ -29,9 +29,53 @@ export class GL {
     this.zoom_level = 1;
     this.color_cycle = 0;
 
+    this.drag_active = false;
+    this.drag_point = new Vector(0, 0, 0, 1);
+
     // Add resize listener
     window.addEventListener('resize', () => {
       this.resize();
+    });
+
+    // Add click listeners
+    canvas.addEventListener('mousedown', (event) => {
+      this.drag_active = true;
+
+      this.drag_point = this.view_matrix.inverse().multiply_vector(
+        this.unproject(
+          event.layerX,
+          this.canvas.clientHeight - event.layerY,
+          0
+        )
+      );
+    });
+    canvas.addEventListener('mouseup', (event) => {
+      this.drag_active = false;
+    });
+    canvas.addEventListener('mousemove', (event) => {
+      // Only move if the mouse is down.
+      if (!this.drag_active) {
+        return;
+      }
+
+      // Stop any zooming going on.
+      this.zoom_speed = 0;
+
+      // Unproject mouse coords into scene coords.
+      const mouse_position = this.view_matrix.inverse().multiply_vector(
+        this.unproject(
+          event.layerX,
+          this.canvas.clientHeight - event.layerY,
+          0
+        )
+      );
+
+      // Set the camera position to: current pos - mouse pos + initial click pos
+      this.set_camera_position(
+        this.camera_position.x - mouse_position.x + this.drag_point.x,
+        this.camera_position.y - mouse_position.y + this.drag_point.y,
+        this.camera_position.z
+      );
     });
 
     // Add mouse wheel listener
