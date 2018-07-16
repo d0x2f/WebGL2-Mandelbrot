@@ -27,6 +27,7 @@ export class GL {
     this.zoom_target = new Vector(0, 0, 0, 1);
     this.zoom_speed = 0;
     this.zoom_level = 1;
+    this.color_cycle = 0;
 
     // Add resize listener
     window.addEventListener('resize', () => {
@@ -260,7 +261,7 @@ export class GL {
   render() {
     this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    this.gl.clearColor(58 / 255, 0, 2 / 15, 1);
+    this.gl.clearColor(0, 0, 0, 0);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
     this.gl.useProgram(this.get_shader_program().ref());
@@ -319,6 +320,22 @@ export class GL {
   }
 
   /**
+   * Cycle the color rotation float.
+   *
+   * @param {integer} frame_delta
+   */
+  cycle(frame_delta) {
+    this.color_cycle = (this.color_cycle + frame_delta / 200) % 1024.0;
+
+    this.get_shader_program().set_uniform_float(
+      'continuous_cycle',
+      this.color_cycle
+    );
+
+    return true;
+  }
+
+  /**
    * The event loop executed for each tick.
    */
   event_loop() {
@@ -335,6 +352,7 @@ export class GL {
 
     scene_dirty |= this.resize();
     scene_dirty |= this.zoom(frame_delta);
+    scene_dirty |= this.cycle(frame_delta);
 
     if (scene_dirty) {
       this.render();

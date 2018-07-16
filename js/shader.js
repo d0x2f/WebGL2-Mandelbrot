@@ -84,6 +84,18 @@ export class ShaderProgram {
   }
 
   /**
+   * Set a float uniform value.
+   *
+   * @param {string} name
+   * @param {float} value
+   */
+  set_uniform_float(name, value) {
+    const location = this.gl.getUniformLocation(this.program, name);
+    this.gl.useProgram(this.program);
+    this.gl.uniform1f(location, value);
+  }
+
+  /**
    * @return {WebGLProgram}
    */
   ref() {

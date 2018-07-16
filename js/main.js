@@ -17,7 +17,7 @@ async function mandelbrot(canvas) {
 
   gl.set_shader_program(shader_program);
 
-  const quad = gl.create_quad(-2, -1, 3, 2);
+  const quad = gl.create_quad(-5, -3, 10, 6);
   const mesh = gl.create_mesh([quad]);
   gl.add_object_to_scene(mesh);
 
