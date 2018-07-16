@@ -325,6 +325,6 @@ export class GL {
     }
 
     // Schedule another tick
-    window.setTimeout(() => this.event_loop(), 0);
+    window.setTimeout(() => this.event_loop(), 1000/60);
   }
 }
