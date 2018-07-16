@@ -28,6 +28,7 @@ export class GL {
     this.zoom_speed = 0;
     this.zoom_level = 1;
     this.color_cycle = 0;
+    this.extreme_mode = false;
 
     this.drag_active = false;
     this.drag_point = new Vector(0, 0, 0, 1);
@@ -35,6 +36,14 @@ export class GL {
     // Add resize listener
     window.addEventListener('resize', () => {
       this.resize();
+    });
+
+    // Add keyboard event listener
+    window.addEventListener('keypress', (event) => {
+      if (event.key === 'x') {
+        this.extreme_mode = !this.extreme_mode;
+        event.preventDefault();
+      }
     });
 
     // Add click listeners
@@ -369,7 +378,11 @@ export class GL {
    * @param {integer} frame_delta
    */
   cycle(frame_delta) {
-    this.color_cycle = (this.color_cycle + frame_delta / 200) % 1024.0;
+    let speed = 200;
+    if (this.extreme_mode) {
+      speed = 10;
+    }
+    this.color_cycle = (this.color_cycle + frame_delta / speed) % 1024.0;
 
     this.get_shader_program().set_uniform_float(
       'continuous_cycle',
@@ -403,6 +416,6 @@ export class GL {
     }
 
     // Schedule another tick
-    window.setTimeout(() => this.event_loop(), (1000 / 60) - (Date.now() - frame_time));
+    requestAnimationFrame(() => this.event_loop());
   }
 }
