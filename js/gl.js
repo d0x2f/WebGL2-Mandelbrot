@@ -26,6 +26,7 @@ export class GL {
     this.camera_position = new Vector(0, 0, 0, 1);
     this.zoom_target = new Vector(0, 0, 0, 1);
     this.zoom_speed = 0;
+    this.zoom_level = 1;
 
     // Add resize listener
     window.addEventListener('resize', () => {
@@ -163,6 +164,10 @@ export class GL {
    * @param {float} z
    */
   set_camera_position(x, y, z) {
+    // Stay within the bounds of the quad.
+    if (x < -2 || x > 1 || y < -1 || y > 1) {
+      return;
+    }
     this.camera_position = new Vector(x, y, z);
     this.view_matrix = Matrix.identity().translate(-x, -y, -z);
   }
@@ -241,6 +246,11 @@ export class GL {
       new Vector(0, 0, 0, 1)
     );
 
+    //this.camera_position = new Vector(0, 0, 0, 1);
+    this.zoom_target = new Vector(0, 0, 0, 1);
+    this.zoom_speed = 0;
+    this.zoom_level = 1;
+
     return true;
   }
 
@@ -287,11 +297,17 @@ export class GL {
     );
 
     // Scale the projection matrix for the zoom effect.
-    this.projection_matrix = this.projection_matrix.scale(
-      1 + (frame_delta * -this.zoom_speed / 1000),
-      1 + (frame_delta * -this.zoom_speed / 1000),
-      1
-    );
+    if ((this.zoom_level < 30000 && this.zoom_speed < 0)
+      || (this.zoom_level > 1 && this.zoom_speed > 0)) {
+      const scale_factor = 1 + (frame_delta * -this.zoom_speed / 1000);
+      this.projection_matrix = this.projection_matrix.scale(
+        scale_factor,
+        scale_factor,
+        1
+      );
+
+      this.zoom_level *= scale_factor;
+    }
 
     // Reduce the zoom speed over time.
     this.zoom_speed *= 1 - (frame_delta / 1000);
@@ -325,6 +341,6 @@ export class GL {
     }
 
     // Schedule another tick
-    window.setTimeout(() => this.event_loop(), 1000/60);
+    window.setTimeout(() => this.event_loop(), (1000 / 60) - (Date.now() - frame_time));
   }
 }
