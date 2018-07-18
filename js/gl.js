@@ -20,14 +20,24 @@ export class GL {
     this.canvas = canvas;
     this.gl = canvas.getContext("webgl2");
     this.gl.get_super = () => this;
+
     this.objects = [];
+
     this.projection_matrix = Matrix.identity();
     this.view_matrix = Matrix.identity();
+
     this.camera_position = new Vector(0, 0, 0, 1);
+    this.mouse_position = new Vector(0, 0, 0, 1);
+
     this.zoom_target = new Vector(0, 0, 0, 1);
     this.zoom_speed = 0;
     this.zoom_level = 1;
+
+    this.desired_julia = 0;
+    this.current_julia = -1;
+
     this.color_cycle = 0;
+
     this.extreme_mode = false;
 
     this.drag_active = false;
@@ -40,23 +50,34 @@ export class GL {
 
     // Add keyboard event listener
     window.addEventListener('keypress', (event) => {
-      if (event.key === 'x') {
-        this.extreme_mode = !this.extreme_mode;
-        event.preventDefault();
-      } else if (event.key === 'c') {
-        if (this.zoom_speed > 0) {
-          this.zoom_speed += 1;
-        } else {
-          this.zoom_speed = 1;
-        }
-        event.preventDefault();
-      } else if (event.key === 'v') {
-        if (this.zoom_speed > 0) {
-          this.zoom_speed = -1;
-        } else {
-          this.zoom_speed -= 1;
-        }
-        event.preventDefault();
+      switch (event.key) {
+        case 'z':
+          this.desired_julia = (this.desired_julia + 1) % 10;
+          event.preventDefault();
+          break;
+        case 'x':
+          this.extreme_mode = !this.extreme_mode;
+          event.preventDefault();
+          break;
+        case 'c':
+          this.zoom_target = this.mouse_position;
+          if (this.zoom_speed > 0) {
+            this.zoom_speed += 1;
+          } else {
+            this.zoom_speed = 1;
+          }
+          event.preventDefault();
+          break;
+        case 'v':
+          this.zoom_target = this.mouse_position;
+          if (this.zoom_speed > 0) {
+            this.zoom_speed = -1;
+          } else {
+            this.zoom_speed -= 1;
+          }
+          event.preventDefault();
+        default:
+          break;
       }
     });
 
@@ -77,7 +98,7 @@ export class GL {
     });
     canvas.addEventListener('mousemove', (event) => {
       // Unproject mouse coords into scene coords.
-      this.zoom_target = this.view_matrix.inverse().multiply_vector(
+      this.mouse_position = this.view_matrix.inverse().multiply_vector(
         this.unproject(event.layerX, this.canvas.clientHeight - event.layerY, 0.5)
       );
 
@@ -88,24 +109,18 @@ export class GL {
 
       // Stop any zooming going on.
       this.zoom_speed = 0;
-      /*this.last_mouse_position = this.view_matrix.inverse().multiply_vector(
-        this.unproject(
-          event.layerX,
-          this.canvas.clientHeight - event.layerY,
-          0
-        )
-      );*/
 
       // Set the camera position to: current pos - mouse pos + initial click pos
       this.set_camera_position(
-        this.camera_position.x - this.zoom_target.x + this.drag_point.x,
-        this.camera_position.y - this.zoom_target.y + this.drag_point.y,
+        this.camera_position.x - this.mouse_position.x + this.drag_point.x,
+        this.camera_position.y - this.mouse_position.y + this.drag_point.y,
         this.camera_position.z
       );
     });
 
     // Add mouse wheel listener
     canvas.addEventListener('wheel', (event) => {
+      this.zoom_target = this.mouse_position;
       if (event.deltaY > 0) {
         if (this.zoom_speed > 0) {
           this.zoom_speed += 1;
@@ -407,6 +422,56 @@ export class GL {
   }
 
   /**
+   * Switch the rendered set.
+   */
+  switch() {
+    if (this.current_julia === this.desired_julia) {
+      return false;
+    }
+
+    this.current_julia = this.desired_julia;
+
+    let c;
+    switch (this.current_julia) {
+      case 0:
+        c = new Vector(0, 0, 0, 0);
+        break;
+      case 1:
+        c = new Vector(-0.4, 0.6, 0, 0);
+        break;
+      case 2:
+        c = new Vector(0.285, 0, 0, 0);
+        break;
+      case 3:
+        c = new Vector(0.285, 0.01, 0, 0);
+        break;
+      case 4:
+        c = new Vector(0.45, 0.1428, 0, 0);
+        break;
+      case 5:
+        c = new Vector(-0.70176, -0.3842, 0, 0);
+        break;
+      case 6:
+        c = new Vector(-0.835, -0.2321, 0, 0);
+        break;
+      case 7:
+        c = new Vector(-0.8, 0.156, 0, 0);
+        break;
+      case 8:
+        c = new Vector(-0.7269, 0.1889, 0, 0);
+        break;
+      case 9:
+      default:
+        c = new Vector(0, -0.8, 0, 0);
+        break;
+    }
+
+    this.get_shader_program().set_uniform_vec2('julia_constant', c);
+
+    return true;
+  }
+
+  /**
    * The event loop executed for each tick.
    */
   event_loop() {
@@ -424,6 +489,7 @@ export class GL {
     scene_dirty |= this.resize();
     scene_dirty |= this.zoom(frame_delta);
     scene_dirty |= this.cycle(frame_delta);
+    scene_dirty |= this.switch();
 
     if (scene_dirty) {
       this.render();

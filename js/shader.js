@@ -84,6 +84,18 @@ export class ShaderProgram {
   }
 
   /**
+   * Set a 2x1 vector uniform value.
+   *
+   * @param {string} name
+   * @param {Vector} value
+   */
+  set_uniform_vec2(name, value) {
+    const location = this.gl.getUniformLocation(this.program, name);
+    this.gl.useProgram(this.program);
+    this.gl.uniform2f(location, value.x, value.y);
+  }
+
+  /**
    * Set a float uniform value.
    *
    * @param {string} name

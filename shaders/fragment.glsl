@@ -5,10 +5,17 @@ precision highp float;
 in vec4 vertex;
 out vec4 output_colour;
 uniform float continuous_cycle;
+uniform vec2 julia_constant;
 
 void main() {
   vec2 p = vertex.xy;
-  vec2 c = p;
+  vec2 c;
+
+  if (julia_constant.x == 0.0 && julia_constant.y == 0.0) {
+    c = p;
+  } else {
+    c = julia_constant;
+  }
 
   vec3 color = vec3(0.0, 0.0, 0.0);
 
