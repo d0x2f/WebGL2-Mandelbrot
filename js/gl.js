@@ -43,6 +43,20 @@ export class GL {
       if (event.key === 'x') {
         this.extreme_mode = !this.extreme_mode;
         event.preventDefault();
+      } else if (event.key === 'c') {
+        if (this.zoom_speed > 0) {
+          this.zoom_speed += 1;
+        } else {
+          this.zoom_speed = 1;
+        }
+        event.preventDefault();
+      } else if (event.key === 'v') {
+        if (this.zoom_speed > 0) {
+          this.zoom_speed = -1;
+        } else {
+          this.zoom_speed -= 1;
+        }
+        event.preventDefault();
       }
     });
 
@@ -62,6 +76,11 @@ export class GL {
       this.drag_active = false;
     });
     canvas.addEventListener('mousemove', (event) => {
+      // Unproject mouse coords into scene coords.
+      this.zoom_target = this.view_matrix.inverse().multiply_vector(
+        this.unproject(event.layerX, this.canvas.clientHeight - event.layerY, 0.5)
+      );
+
       // Only move if the mouse is down.
       if (!this.drag_active) {
         return;
@@ -69,29 +88,24 @@ export class GL {
 
       // Stop any zooming going on.
       this.zoom_speed = 0;
-
-      // Unproject mouse coords into scene coords.
-      const mouse_position = this.view_matrix.inverse().multiply_vector(
+      /*this.last_mouse_position = this.view_matrix.inverse().multiply_vector(
         this.unproject(
           event.layerX,
           this.canvas.clientHeight - event.layerY,
           0
         )
-      );
+      );*/
 
       // Set the camera position to: current pos - mouse pos + initial click pos
       this.set_camera_position(
-        this.camera_position.x - mouse_position.x + this.drag_point.x,
-        this.camera_position.y - mouse_position.y + this.drag_point.y,
+        this.camera_position.x - this.zoom_target.x + this.drag_point.x,
+        this.camera_position.y - this.zoom_target.y + this.drag_point.y,
         this.camera_position.z
       );
     });
 
     // Add mouse wheel listener
     canvas.addEventListener('wheel', (event) => {
-      this.zoom_target = this.view_matrix.inverse().multiply_vector(
-        this.unproject(event.layerX, this.canvas.clientHeight - event.layerY, 0.5)
-      );
       if (event.deltaY > 0) {
         if (this.zoom_speed > 0) {
           this.zoom_speed += 1;
