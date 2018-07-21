@@ -1,7 +1,6 @@
 "use strict";
 
 import { Object } from './object.js';
-import { Matrix } from './matrix.js';
 
 /**
  * Represents a renderable quad.

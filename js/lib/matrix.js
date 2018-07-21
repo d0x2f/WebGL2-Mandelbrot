@@ -278,17 +278,6 @@ export class Matrix {
   }
 
   /**
-   * Prints the matrix to the debug console.
-   */
-  debug() {
-    console.log(this.r1);
-    console.log(this.r2);
-    console.log(this.r3);
-    console.log(this.r4);
-    console.log('---------------');
-  }
-
-  /**
    * Return the identity matrix.
    *
    * @return {Matrix}
