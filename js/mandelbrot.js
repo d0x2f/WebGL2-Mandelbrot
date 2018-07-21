@@ -1,7 +1,7 @@
 "use strict";
 
-import { GL } from './lib/gl.js';
-import { Vector } from './lib/vector.js';
+import { GL } from '../lib/gl.js';
+import { Vector } from '../lib/vector.js';
 
 /**
  * Class representing the madelbrot animation.
@@ -68,21 +68,11 @@ export class Mandelbrot {
           event.preventDefault();
           break;
         case 'c':
-          this.zoom_target = this.mouse_position;
-          if (this.zoom_speed > 0) {
-            this.zoom_speed += 1;
-          } else {
-            this.zoom_speed = 1;
-          }
+          this.zoom(true);
           event.preventDefault();
           break;
         case 'v':
-          this.zoom_target = this.mouse_position;
-          if (this.zoom_speed > 0) {
-            this.zoom_speed = -1;
-          } else {
-            this.zoom_speed -= 1;
-          }
+          this.zoom(false);
           event.preventDefault();
           break;
         default:
@@ -127,8 +117,17 @@ export class Mandelbrot {
       );
 
       // Don't move outside the quad.
-      if (position.x < -2 || position.x > 1 || position.y < -1 || position.y > 1) {
-        return;
+      if (position.x < -2) {
+        position.x = -2;
+      }
+      if (position.x > 1) {
+        position.x = 1;
+      }
+      if (position.y < -1) {
+        position.y = -1;
+      }
+      if (position.y > 1) {
+        position.y = 1;
       }
 
       this.gl.set_camera_position(
@@ -140,51 +139,61 @@ export class Mandelbrot {
 
     // Add mouse wheel listener
     this.canvas.addEventListener('wheel', (event) => {
-      // No zooming while dragging.
-      if (this.drag_active) {
-        return;
-      }
-
       // Unproject mouse coords into scene coords.
       this.mouse_position = this.gl.unproject(event.layerX, this.canvas.clientHeight - event.layerY, 0.5);
-
-      this.zoom_target = this.gl.view_matrix.inverse().multiply_vector(this.mouse_position);
-
-      // Don't move outside the quad.
-      if (this.zoom_target.x < -2) {
-        this.zoom_target.x = -2;
-      }
-      if (this.zoom_target.x > 1) {
-        this.zoom_target.x = 1;
-      }
-      if (this.zoom_target.y < -1) {
-        this.zoom_target.y = -1;
-      }
-      if (this.zoom_target.y > 1) {
-        this.zoom_target.y = 1;
-      }
-
-      if (event.deltaY > 0) {
-        if (this.zoom_speed > 0) {
-          this.zoom_speed += 1;
-        } else {
-          this.zoom_speed = 1;
-        }
-      } else {
-        if (this.zoom_speed > 0) {
-          this.zoom_speed = -1;
-        } else {
-          this.zoom_speed -= 1;
-        }
-      }
+      this.zoom(event.deltaY > 0);
     });
 
-    this.gl.add_render_hook((frame_delta) => this.zoom(frame_delta));
-    this.gl.add_render_hook((frame_delta) => this.cycle(frame_delta));
-    this.gl.add_render_hook(() => this.switch());
+    this.gl.add_render_hook((frame_delta) => this.zoom_hook(frame_delta));
+    this.gl.add_render_hook((frame_delta) => this.cycle_hook(frame_delta));
+    this.gl.add_render_hook(() => this.switch_hook());
     this.gl.add_render_hook(() => this.drag_active);
 
     this.gl.event_loop();
+  }
+
+  /**
+   * Handle a zoom event.
+   *
+   * @param {float} x
+   * @param {float} y
+   * @param {boolean} out True if zooming out.
+   */
+  zoom(out) {
+    // No zooming while dragging.
+    if (this.drag_active) {
+      return;
+    }
+
+    this.zoom_target = this.gl.view_matrix.inverse().multiply_vector(this.mouse_position);
+
+    // Don't move outside the quad.
+    if (this.zoom_target.x < -2) {
+      this.zoom_target.x = -2;
+    }
+    if (this.zoom_target.x > 1) {
+      this.zoom_target.x = 1;
+    }
+    if (this.zoom_target.y < -1) {
+      this.zoom_target.y = -1;
+    }
+    if (this.zoom_target.y > 1) {
+      this.zoom_target.y = 1;
+    }
+
+    if (out) {
+      if (this.zoom_speed > 0) {
+        this.zoom_speed += 1;
+      } else {
+        this.zoom_speed = 1;
+      }
+    } else {
+      if (this.zoom_speed > 0) {
+        this.zoom_speed = -1;
+      } else {
+        this.zoom_speed -= 1;
+      }
+    }
   }
 
   /**
@@ -192,9 +201,29 @@ export class Mandelbrot {
    *
    * @param {integer} frame_delta
    */
-  zoom(frame_delta) {
+  zoom_hook(frame_delta) {
     if (this.zoom_speed === 0) {
       return false;
+    }
+
+    // Scale the projection matrix for the zoom effect.
+    if ((this.zoom_level < 30000 && this.zoom_speed < 0) || (this.zoom_level > 1 && this.zoom_speed > 0)) {
+      const scale_factor = 1 - (frame_delta * this.zoom_speed / 1000);
+      this.gl.projection_matrix = this.gl.projection_matrix.scale(
+        scale_factor,
+        scale_factor,
+        1
+      );
+
+      this.zoom_level *= scale_factor;
+
+      // Reduce the zoom speed over time.
+      this.zoom_speed *= 1 - (frame_delta / 1000);
+      if (Math.abs(this.zoom_speed) < 0.005) {
+        this.zoom_speed = 0;
+      }
+    } else {
+      this.zoom_speed = 0;
     }
 
     // Find the vector from the current camera position to the zoom target.
@@ -207,29 +236,18 @@ export class Mandelbrot {
     ).multiply(frame_delta * Math.abs(this.zoom_speed) / 1000);
 
     // Update the camera position along the movement vector.
-    this.gl.translate_camera_position(
-      movement_vector.x,
-      movement_vector.y,
-      0,
-    );
-
-    // Scale the projection matrix for the zoom effect.
-    if ((this.zoom_level < 30000 && this.zoom_speed < 0)
-      || (this.zoom_level > 1 && this.zoom_speed > 0)) {
-      const scale_factor = 1 + (frame_delta * -this.zoom_speed / 1000);
-      this.gl.projection_matrix = this.gl.projection_matrix.scale(
-        scale_factor,
-        scale_factor,
-        1
+    if (this.zoom_speed < 0) {
+      this.gl.translate_camera_position(
+        movement_vector.x,
+        movement_vector.y,
+        0
       );
-
-      this.zoom_level *= scale_factor;
-    }
-
-    // Reduce the zoom speed over time.
-    this.zoom_speed *= 1 - (frame_delta / 1000);
-    if (Math.abs(this.zoom_speed) < 0.005) {
-      this.zoom_speed = 0;
+    } else {
+      this.gl.translate_camera_position(
+        -movement_vector.x,
+        -movement_vector.y,
+        0
+      );
     }
 
     return true;
@@ -240,7 +258,7 @@ export class Mandelbrot {
    *
    * @param {integer} frame_delta
    */
-  cycle(frame_delta) {
+  cycle_hook(frame_delta) {
     let speed = 200;
     if (this.extreme_mode) {
       speed = 10;
@@ -258,7 +276,7 @@ export class Mandelbrot {
   /**
    * Switch the rendered set.
    */
-  switch() {
+  switch_hook() {
     if (this.current_julia === this.desired_julia) {
       return false;
     }
