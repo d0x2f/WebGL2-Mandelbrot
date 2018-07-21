@@ -24,7 +24,7 @@ export class Mandelbrot {
 
     this.gl.set_shader_program(shader_program);
 
-    const quad = this.gl.create_quad(-5, -3, 10, 6);
+    const quad = this.gl.create_quad(-8, -4, 16, 8);
     const mesh = this.gl.create_mesh([quad]);
     this.gl.add_object_to_scene(mesh);
 
@@ -48,6 +48,13 @@ export class Mandelbrot {
     this.drag_camera_start = new Vector(0, 0, 0, 1);
 
     this.scene_dirty = false;
+
+    // Add resize handler to reset zoom level
+    window.addEventListener('resize', () => {
+      this.zoom_target = new Vector(0, 0, 0, 1);
+      this.zoom_speed = 0;
+      this.zoom_level = 1;
+    });
 
     // Add keyboard event listener
     window.addEventListener('keypress', (event) => {
@@ -113,9 +120,20 @@ export class Mandelbrot {
       this.zoom_speed = 0;
 
       // Set the camera position to: current pos - mouse pos + initial click pos
-      this.gl.set_camera_position(
+      const position = new Vector(
         this.drag_camera_start.x + this.drag_point.x - this.mouse_position.x,
         this.drag_camera_start.y + this.drag_point.y - this.mouse_position.y,
+        0
+      );
+
+      // Don't move outside the quad.
+      if (position.x < -2 || position.x > 1 || position.y < -1 || position.y > 1) {
+        return;
+      }
+
+      this.gl.set_camera_position(
+        position.x,
+        position.y,
         0
       );
     });
@@ -131,6 +149,21 @@ export class Mandelbrot {
       this.mouse_position = this.gl.unproject(event.layerX, this.canvas.clientHeight - event.layerY, 0.5);
 
       this.zoom_target = this.gl.view_matrix.inverse().multiply_vector(this.mouse_position);
+
+      // Don't move outside the quad.
+      if (this.zoom_target.x < -2) {
+        this.zoom_target.x = -2;
+      }
+      if (this.zoom_target.x > 1) {
+        this.zoom_target.x = 1;
+      }
+      if (this.zoom_target.y < -1) {
+        this.zoom_target.y = -1;
+      }
+      if (this.zoom_target.y > 1) {
+        this.zoom_target.y = 1;
+      }
+
       if (event.deltaY > 0) {
         if (this.zoom_speed > 0) {
           this.zoom_speed += 1;

@@ -248,11 +248,6 @@ export class GL {
       new Vector(0, 0, 0, 1)
     );
 
-    //this.camera_position = new Vector(0, 0, 0, 1);
-    this.zoom_target = new Vector(0, 0, 0, 1);
-    this.zoom_speed = 0;
-    this.zoom_level = 1;
-
     return true;
   }
 
