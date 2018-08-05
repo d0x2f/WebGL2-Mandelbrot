@@ -1,5 +1,3 @@
-"use strict";
-
 import { GL } from '../lib/gl.js';
 import { Vector } from '../lib/vector.js';
 
